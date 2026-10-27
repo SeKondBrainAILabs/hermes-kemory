@@ -59,7 +59,7 @@ def read_config_file(hermes_home: str) -> dict[str, Any]:
     """Return the parsed kemory.json object, or {} when it is missing or not a JSON object."""
     try:
         parsed = json.loads((Path(hermes_home) / CONFIG_FILENAME).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return {}
     if not isinstance(parsed, dict):
         return {}

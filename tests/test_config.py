@@ -228,6 +228,14 @@ def test_bad_config_file_falls_back_to_defaults(hermes_home: Path, content: str)
     )
 
 
+def test_deeply_nested_config_file_gives_defaults(hermes_home: Path) -> None:
+    write_config(hermes_home, "[" * 200_000 + "]" * 200_000)
+    assert read_config_file(str(hermes_home)) == {}
+    assert load_config(str(hermes_home)) == KemoryConfig(
+        api_key=API_KEY, base_url=DEFAULT_BASE_URL, org_pin=None
+    )
+
+
 def test_missing_config_file_and_directory(hermes_home: Path, tmp_path: Path) -> None:
     assert read_config_file(str(hermes_home)) == {}
     assert read_config_file(str(tmp_path / "does-not-exist")) == {}
@@ -279,7 +287,7 @@ def test_secret_scope_failure_becomes_config_error(
         load_config(str(hermes_home))
 
 
-def test_only_the_config_file_is_read(
+def test_cli_login_file_is_not_used(
     hermes_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     other_home = tmp_path / "user-home"

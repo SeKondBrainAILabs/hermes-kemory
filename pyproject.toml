@@ -41,8 +41,10 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 strict = true
 mypy_path = ".hermes"
 files = ["hermes_kemory"]
-
-# Hermes ships no py.typed, so its modules are followed but not reported on.
-[[tool.mypy.overrides]]
-module = ["agent.*", "hermes_cli.*", "plugins.*", "tools.*", "gateway.*"]
+# Hermes ships no py.typed, and the modules it imports differ between releases, so
+# everything outside this plugin is followed but not reported on.
 follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = ["hermes_kemory.*"]
+follow_imports = "normal"
