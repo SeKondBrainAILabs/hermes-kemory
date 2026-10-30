@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from .fake_kemory import FakeKemory
+
 
 @pytest.fixture(autouse=True)
 def hermes_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
@@ -19,3 +21,17 @@ def hermes_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
     # The Hermes checkout has a plugins/ dir that Hermes would scan as project plugins.
     monkeypatch.delenv("HERMES_ENABLE_PROJECT_PLUGINS", raising=False)
     yield home
+
+
+@pytest.fixture(autouse=True)
+def no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests talk to a fake server on 127.0.0.1; a developer's proxy must not intercept that."""
+    for name in ("http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
+@pytest.fixture
+def fake_kemory() -> Iterator[FakeKemory]:
+    with FakeKemory() as server:
+        yield server
