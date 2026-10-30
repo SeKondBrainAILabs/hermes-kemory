@@ -1,0 +1,50 @@
+[project]
+name = "hermes-kemory"
+version = "0.1.0"
+description = "Kemory memory provider for Hermes Agent (development environment)"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = []
+
+# The Hermes plugin is the hermes_kemory/ directory; this file only serves
+# development (tests, lint, types) and is never installed with the plugin.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-xdist",
+    "ruff",
+    "mypy",
+    "hermes-agent",
+]
+
+# Hermes refuses to build as a wheel, so it comes from the checkout that
+# scripts/fetch-hermes.sh puts in .hermes/.
+[tool.uv.sources]
+hermes-agent = { path = ".hermes", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".hermes", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+mypy_path = ".hermes"
+files = ["hermes_kemory"]
+# Hermes ships no py.typed, and the modules it imports differ between releases, so
+# everything outside this plugin is followed but not reported on.
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = ["hermes_kemory.*"]
+follow_imports = "normal"

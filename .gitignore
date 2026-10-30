@@ -1,0 +1,9 @@
+# Hermes checkout used by the tests (scripts/fetch-hermes.sh)
+.hermes/
+.venv/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
