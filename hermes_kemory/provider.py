@@ -408,7 +408,7 @@ class KemoryMemoryProvider(MemoryProvider):
             logger.warning("Kemory tool %s failed and was skipped", tool_name, exc_info=True)
             return json.dumps({"error": f"Kemory tool {tool_name} failed: {type(exc).__name__}"})
 
-    def _run_tool(self, tool_name: str, args: Any) -> dict[str, Any]:
+    def _run_tool(self, tool_name: str, args: object) -> dict[str, Any]:
         if tool_name not in TOOL_NAMES:
             return {"error": f"Unknown Kemory tool: {tool_name}"}
         with self._lock:
@@ -445,7 +445,7 @@ def _format_block(summaries: str, hits: list[Hit]) -> str:
     return "<kemory-context>\n" + "\n\n".join(sections) + "\n</kemory-context>"
 
 
-def _text(value: Any) -> str:
+def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
