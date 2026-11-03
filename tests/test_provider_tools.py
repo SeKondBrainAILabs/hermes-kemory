@@ -34,7 +34,9 @@ def test_search_tool(start_provider: StartProvider, fake_kemory: FakeKemory) -> 
     )
     running = start_provider(max_recall_results=5)
 
-    result = running.tool("kemory_search", {"query": "drinks", "namespace": "user:profile"})
+    result = running.tool(
+        "kemory_search", {"query": "drinks", "namespace": "user:profile", "limit": 3}
+    )
 
     assert result == {
         "results": [
@@ -45,7 +47,7 @@ def test_search_tool(start_provider: StartProvider, fake_kemory: FakeKemory) -> 
     (request,) = sent(fake_kemory, "POST", SEARCH)
     assert request.body == {
         "query": "drinks",
-        "limit": 5,
+        "limit": 3,
         "search_mode": "hybrid",
         "namespace": "user:profile",
     }
