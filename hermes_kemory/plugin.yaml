@@ -1,0 +1,5 @@
+name: kemory
+version: 0.1.0
+description: "Kemory long-term memory — profile recall, semantic search and explicit memory tools."
+requires_env:
+  - KEMORY_API_KEY

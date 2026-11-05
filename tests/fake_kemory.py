@@ -61,6 +61,8 @@ class _Server(ThreadingHTTPServer):
 class FakeKemory:
     def __init__(self) -> None:
         self.requests: list[RecordedRequest] = []
+        # What an unscripted search finds, once the query passes the length check.
+        self.search_items: list[dict[str, Any]] = []
         self._scripted: list[_Scripted] = []
         self._lock = threading.Lock()
         self._stopped = threading.Event()
@@ -166,7 +168,7 @@ class FakeKemory:
                 return answer(
                     422, {"detail": [{"loc": ["body", "query"], "msg": "String too long"}]}
                 )
-            return answer(200, {"items": []})
+            return answer(200, {"items": self.search_items})
         if (method, route) == ("POST", "/api/v1/memories"):
             self._created += 1
             namespace = request.body.get("namespace") if isinstance(request.body, dict) else None
