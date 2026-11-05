@@ -1,5 +1,6 @@
 """Shared fixtures. The autouse fixture keeps a developer's own setup out of every test."""
 
+import hashlib
 import json
 import os
 from collections.abc import Callable, Iterator
@@ -12,7 +13,7 @@ from agent.memory_manager import MemoryManager
 
 from hermes_kemory.provider import KemoryMemoryProvider
 
-from .fake_kemory import FakeKemory
+from .fake_kemory import FakeKemory, RecordedRequest
 
 
 @pytest.fixture(autouse=True)
@@ -58,6 +59,21 @@ class Running:
     def prefetch(self, query: str) -> str:
         return self.manager.prefetch_all(query, session_id="s1")
 
+    def turn(self, text: str, *, session_id: str = "s1", **kwargs: Any) -> None:
+        """Report one finished turn to the provider, as Hermes's background worker does."""
+        self.provider.sync_turn(text, "assistant reply", session_id=session_id, **kwargs)
+
+    def turns(self, *texts: str, session_id: str = "s1") -> None:
+        for text in texts:
+            self.turn(text, session_id=session_id)
+
+    def posts(self) -> list[RecordedRequest]:
+        return self.server.posts()
+
+    def state_file(self, session_id: str = "s1") -> Path:
+        name = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+        return self.home / "kemory" / "captured" / f"{name}.json"
+
     def tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         result = json.loads(self.manager.handle_tool_call(name, args))
         assert isinstance(result, dict)
@@ -74,8 +90,8 @@ def start_provider(
     """Start a provider against the fake server, with settings for kemory.json as keywords.
 
     platform and agent_context are what Hermes would pass to initialize(); key=None leaves the
-    API key unset, initialize=False only registers the provider, and url replaces the fake
-    server's address.
+    API key unset, initialize=False only registers the provider, url replaces the fake server's
+    address and cwd is the working directory Hermes reports.
     """
     managers: list[MemoryManager] = []
 
@@ -86,6 +102,7 @@ def start_provider(
         key: str | None = API_KEY,
         initialize: bool = True,
         url: str | None = None,
+        cwd: str | None = None,
         settings: dict[str, Any] | None = None,
         **config: Any,
     ) -> Running:
@@ -105,6 +122,8 @@ def start_provider(
                 kwargs["platform"] = platform
             if agent_context is not None:
                 kwargs["agent_context"] = agent_context
+            if cwd is not None:
+                kwargs["cwd"] = cwd
             manager.initialize_all(session_id="s1", **kwargs)
         return Running(manager, provider, fake_kemory, hermes_home)
 
