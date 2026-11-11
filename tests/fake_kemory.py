@@ -2,7 +2,8 @@
 
 import json
 import threading
-from collections.abc import Iterator, Mapping
+import time
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import TracebackType
@@ -67,6 +68,10 @@ class FakeKemory:
         self._lock = threading.Lock()
         self._stopped = threading.Event()
         self._created = 0
+        self._last_request_at = time.monotonic()
+        self._posts_in_flight = 0
+        # The most memory writes the server has had open at once.
+        self.max_concurrent_posts = 0
         self._server = _Server(("127.0.0.1", 0), _make_handler(self))
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
@@ -121,6 +126,42 @@ class FakeKemory:
         return [
             urlsplit(r.path).path for r in self.requests if method is None or r.method == method
         ]
+
+    def posts(self) -> list[RecordedRequest]:
+        """The writes to POST /api/v1/memories, in order."""
+        return [r for r in list(self.requests) if _is_memory_post(r.method, r.path)]
+
+    def wait_for(self, condition: Callable[[], bool], timeout: float = 5.0) -> bool:
+        """Wait until condition() holds; False when it did not within timeout seconds."""
+        end = time.monotonic() + timeout
+        while not condition():
+            if time.monotonic() >= end:
+                return False
+            time.sleep(0.01)
+        return True
+
+    def wait_for_posts(self, count: int, timeout: float = 5.0) -> bool:
+        return self.wait_for(lambda: len(self.posts()) >= count, timeout)
+
+    def wait_quiet(self, seconds: float = 0.3, timeout: float = 10.0) -> None:
+        """Wait until no request has arrived for `seconds`, so asynchronous work has settled."""
+        started = time.monotonic()
+        while time.monotonic() - started < timeout:
+            # Counting from the call as well as from the last request: work that has not reached
+            # the server yet must get its chance before the server is declared quiet.
+            quiet_since = max(self._last_request_at, started)
+            if time.monotonic() - quiet_since >= seconds and not self._posts_in_flight:
+                return
+            time.sleep(0.02)
+
+    def _post_started(self) -> None:
+        with self._lock:
+            self._posts_in_flight += 1
+            self.max_concurrent_posts = max(self.max_concurrent_posts, self._posts_in_flight)
+
+    def _post_finished(self) -> None:
+        with self._lock:
+            self._posts_in_flight -= 1
 
     def _answer(self, request: RecordedRequest) -> _Scripted:
         route = urlsplit(request.path).path
@@ -192,18 +233,27 @@ def _make_handler(fake: FakeKemory) -> type[BaseHTTPRequestHandler]:
             request = RecordedRequest(
                 self.command, self.path, Headers(list(self.headers.items())), body
             )
+            fake._last_request_at = time.monotonic()
             fake.requests.append(request)
-            scripted = fake._answer(request)
-            if scripted.delay and fake._stopped.wait(scripted.delay):
-                return
-            payload = _encode(scripted.body)
-            self.send_response(scripted.status)
-            for name, value in scripted.headers.items():
-                self.send_header(name, value)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
+            is_post = _is_memory_post(request.method, request.path)
+            if is_post:
+                fake._post_started()
+            try:
+                scripted = fake._answer(request)
+                if scripted.delay and fake._stopped.wait(scripted.delay):
+                    return
+                payload = _encode(scripted.body)
+                self.send_response(scripted.status)
+                for name, value in scripted.headers.items():
+                    self.send_header(name, value)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            finally:
+                if is_post:
+                    fake._post_finished()
+            fake._last_request_at = time.monotonic()
 
         do_GET = do_POST = do_DELETE = do_PUT = do_PATCH = _handle
 
@@ -211,6 +261,10 @@ def _make_handler(fake: FakeKemory) -> type[BaseHTTPRequestHandler]:
             pass
 
     return Handler
+
+
+def _is_memory_post(method: str, path: str) -> bool:
+    return method == "POST" and urlsplit(path).path == "/api/v1/memories"
 
 
 def _encode(body: Any) -> bytes:

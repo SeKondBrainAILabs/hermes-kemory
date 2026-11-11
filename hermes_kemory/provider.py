@@ -9,8 +9,6 @@ import copy
 import functools
 import json
 import logging
-import os
-import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -24,6 +22,12 @@ from agent.memory_provider import (
 )
 from agent.secret_scope import get_secret
 
+from .capture import (
+    WHEN_BEFORE_COMPACTION,
+    WHEN_SESSION_END,
+    Capture,
+    write_private_json,
+)
 from .client import KemoryClient, KemoryError
 from .config import (
     API_KEY_ENV,
@@ -71,7 +75,7 @@ logger = logging.getLogger(__name__)
 # can mix people while the memories belong to the key's owner, so it stays off unless the user
 # sets gateways: true.
 LOCAL_PLATFORMS = frozenset({"", "cli", "tui", "desktop", "acp", "local"})
-# Cron jobs may recall, but they run unattended and must not write.
+# Cron jobs may recall, but they run unattended and never capture.
 RECALL_ONLY_PLATFORMS = frozenset({"cron"})
 # Agent contexts that must never capture what the user typed.
 NO_CAPTURE_CONTEXTS = frozenset({"cron", "subagent", "flush"})
@@ -129,6 +133,7 @@ class KemoryMemoryProvider(MemoryProvider):
         self._platform = ""
         self._agent_context = "primary"
         self._cwd: str | None = None
+        self._capture: Capture | None = None
         self._summaries: list[tuple[str, str]] = []
         self._summaries_pending = False
         self._context_done = threading.Event()
@@ -195,7 +200,7 @@ class KemoryMemoryProvider(MemoryProvider):
                 # The setup wizard hands choices over as text.
                 value = _BOOL_WORDS.get(value.strip().lower(), value)
             merged[key] = value
-        _write_private_json(Path(hermes_home) / CONFIG_FILENAME, merged)
+        write_private_json(Path(hermes_home) / CONFIG_FILENAME, merged)
 
     @_never_raises(dict)
     def get_status_config(self, provider_config: dict[str, Any]) -> dict[str, Any]:
@@ -248,7 +253,26 @@ class KemoryMemoryProvider(MemoryProvider):
         if config is not None:
             client = KemoryClient(config)
 
+        capture: Capture | None = None
+        if (
+            config is not None
+            and client is not None
+            and isinstance(home, str)
+            and config.auto_capture
+            and agent_context not in NO_CAPTURE_CONTEXTS
+            and platform not in RECALL_ONLY_PLATFORMS
+        ):
+            capture = Capture(
+                client,
+                config,
+                home,
+                platform=platform,
+                cwd=cwd if isinstance(cwd, str) and cwd else None,
+            )
+
         with self._lock:
+            previous = self._capture
+            self._capture = capture
             self._initialized = True
             self._config = config
             self._client = client
@@ -262,6 +286,8 @@ class KemoryMemoryProvider(MemoryProvider):
             self._context_done = threading.Event()
             self._last_recall = None
             done = self._context_done
+        if previous is not None:
+            previous.shutdown()
         if config is not None and client is not None:
             if config.auto_recall:
                 self._start_context_fetch(client, config, done)
@@ -279,10 +305,19 @@ class KemoryMemoryProvider(MemoryProvider):
         **kwargs: Any,
     ) -> None:
         with self._lock:
+            old_session_id = self._session_id
+            capture = self._capture
             self._session_id = new_session_id
             # A new session starts without the profile summaries it never saw.
             self._summaries_pending = True
+        if capture is not None and new_session_id != old_session_id:
+            capture.switch(
+                old_session_id, new_session_id, parent=_text(parent_session_id), reset=reset
+            )
 
+    # -- Capture ------------------------------------------------------------
+
+    @_never_raises(lambda: None)
     def sync_turn(
         self,
         user_content: str,
@@ -292,16 +327,39 @@ class KemoryMemoryProvider(MemoryProvider):
         messages: list[dict[str, Any]] | None = None,
         turn_author: dict[str, Any] | None = None,
     ) -> None:
-        """Nothing is captured yet."""
+        """Note what the user typed this turn; the post itself happens on the writer thread.
 
+        Only user_content is used. messages and assistant_content are never read: on turns with
+        images Hermes puts the recalled memory block in the user row of messages, and saving
+        that would write recalled memories back as if the user had said them.
+        """
+        with self._lock:
+            capture, current = self._capture, self._session_id
+        if capture is not None:
+            capture.add_turn(session_id or current, user_content, turn_author)
+
+    @_never_raises(lambda: None)
     def on_session_end(self, messages: list[dict[str, Any]]) -> None:
-        """Nothing is captured yet."""
+        with self._lock:
+            capture = self._capture
+        if capture is not None:
+            capture.flush(WHEN_SESSION_END)
 
+    @_never_raises(str)
     def on_pre_compress(self, messages: list[dict[str, Any]]) -> str:
+        with self._lock:
+            capture = self._capture
+        if capture is not None:
+            capture.flush(WHEN_BEFORE_COMPACTION)
         return ""
 
+    @_never_raises(lambda: None)
     def shutdown(self) -> None:
-        """Nothing is queued yet."""
+        """Post what is still pending and stop the writer, waiting at most about five seconds."""
+        with self._lock:
+            capture = self._capture
+        if capture is not None:
+            capture.shutdown()
 
     # -- Recall -------------------------------------------------------------
 
@@ -447,18 +505,3 @@ def _format_block(summaries: str, hits: list[Hit]) -> str:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
-
-
-def _write_private_json(path: Path, values: dict[str, Any]) -> None:
-    """Replace path with values as JSON that only its owner can read."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp:
-            os.fchmod(tmp.fileno(), 0o600)
-            json.dump(values, tmp, indent=2, sort_keys=True)
-            tmp.write("\n")
-        os.replace(tmp_name, path)
-    except BaseException:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise
