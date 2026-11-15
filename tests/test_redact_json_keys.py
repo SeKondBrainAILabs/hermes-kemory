@@ -85,3 +85,23 @@ def test_quoted_key_with_short_value_is_kept() -> None:
 def test_quoted_key_word_in_prose_is_kept() -> None:
     text = 'the "token" field is empty'
     assert redact(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"access_token": "Bearer 8f2c1a9b7d6e5f4a3b2c1d0e"}',
+        '{"token": "Bearer 8f2c1a9b7d6e5f4a3b2c1d0e"}',
+        "{'auth_token': 'Bearer 8f2c1a9b7d6e5f4a3b2c1d0e'}",
+        r"{\"access_token\": \"Bearer 8f2c1a9b7d6e5f4a3b2c1d0e\"}",
+        "token: Bearer 8f2c1a9b7d6e5f4a3b2c1d0e",
+    ],
+    ids=["access_token", "token", "single-quoted", "escaped", "unquoted"],
+)
+def test_quoted_key_with_bearer_value_redacts_the_token(text: str) -> None:
+    assert "8f2c1a9b7d6e5f4a3b2c1d0e" not in redact(text)
+
+
+def test_quoted_key_with_bearer_value_exact_output() -> None:
+    out = redact('{"access_token": "Bearer 8f2c1a9b7d6e5f4a3b2c1d0e"}')
+    assert out == '{"[REDACTED]"}'

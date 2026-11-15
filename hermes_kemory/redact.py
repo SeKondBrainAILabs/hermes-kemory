@@ -4,14 +4,13 @@ import re
 
 REDACTED = "[REDACTED]"
 
-# ASCII-only \w and \s keep the pattern close to the one used by Kemory's other agent hooks, so a
-# prompt is redacted the same way whichever host captures it. This version also accepts a quoted,
-# optionally backslash-escaped key word ("api_key": "...", {\"api_key\": \"...\"}); the other
-# Kemory agent hooks should take the same change.
+# ASCII-only \w and \s keep the pattern close to the one used by Kemory's other agent hooks. This
+# version also accepts a quoted, optionally backslash-escaped key word ("api_key": "...",
+# {\"api_key\": \"...\"}); the other Kemory agent hooks should take the same change.
 _CREDENTIAL = re.compile(
     r"(bearer\s+[\w\-\.]{8,}"
     r"|(?:api[_-]?key|api[_-]?token|access[_-]?token|auth[_-]?token|token|secret|password|passwd|pwd)"
-    r"(?:\\*[\"'])?\s*[:=]\s*(?:\\*[\"'])?[^\s\"',;}]{6,}"
+    r"(?:\\*[\"'])?\s*[:=]\s*(?:\\*[\"'])?(?:bearer\s+)?[^\s\"',;}]{6,}"
     r"|sk-[A-Za-z0-9]{16,}"
     r"|gh[pousr]_[A-Za-z0-9]{20,}"
     r"|AKIA[0-9A-Z]{16}"
