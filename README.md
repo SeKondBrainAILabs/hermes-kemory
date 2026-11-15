@@ -149,9 +149,10 @@ conversation history.
 - That is all that is removed. Text that another plugin adds to an image turn can still be
   included in what is captured.
 - Secrets are replaced with `[REDACTED]`. This is a pattern match on common credential shapes:
-  bearer tokens, `key=value` secrets (`api_key`, `token`, `secret`, `password` and similar), `sk-`
-  keys, GitHub, AWS and Slack tokens, JWTs and private key headers. It is pattern-based and will
-  not catch every secret, so do not type secrets you cannot afford to have stored.
+  bearer tokens, `key=value` secrets (`api_key`, `token`, `secret`, `password` and similar, also
+  when the key is quoted, as in JSON or Python dicts: `"api_key": "..."`), `sk-` keys, GitHub, AWS
+  and Slack tokens, JWTs and private key headers. It is pattern-based and will not catch every
+  secret, so do not type secrets you cannot afford to have stored.
 
 ### When it is posted, and where it goes
 
@@ -216,6 +217,8 @@ uv run mypy
 uv run pytest -n 2
 uv run hermes plugins validate hermes_kemory
 ```
+
+After the setup steps, `make check` runs those checks.
 
 `scripts/fetch-hermes.sh` checks out Hermes v0.22.3 by default. To test against the oldest
 supported release, v0.22.0, pass its commit:

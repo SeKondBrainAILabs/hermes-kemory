@@ -106,6 +106,17 @@ def test_secrets_redacted_and_length_capped(start_provider: StartProvider) -> No
     assert body.startswith("- " + "a" * 5000 + "\n- b")
 
 
+def test_quoted_key_secrets_redacted_in_capture(start_provider: StartProvider) -> None:
+    running = start_provider()
+
+    running.turns('{"api_key": "abcdef123456"}', "second", "third")
+    assert running.server.wait_for_posts(1)
+
+    content = running.posts()[0].body["content"]
+    assert "abcdef123456" not in content
+    assert content.count("[REDACTED]") == 1
+
+
 def test_only_user_content_is_sent(start_provider: StartProvider) -> None:
     running = start_provider()
     injected = (
