@@ -151,7 +151,7 @@ conversation history.
 - Secrets are replaced with `[REDACTED]`. This is a pattern match on common credential shapes:
   bearer tokens, `key=value` secrets (`api_key`, `token`, `secret`, `password` and similar, also
   when the key is quoted, as in JSON or Python dicts: `"api_key": "..."`), `sk-` keys, GitHub, AWS
-  and Slack tokens, JWTs and private key headers. It is pattern-based and will not catch every
+  and Slack tokens, JWTs and whole private key blocks. It is pattern-based and will not catch every
   secret, so do not type secrets you cannot afford to have stored.
 
 ### When it is posted, and where it goes
