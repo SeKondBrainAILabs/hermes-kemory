@@ -7,10 +7,13 @@ REDACTED = "[REDACTED]"
 # ASCII-only \w and \s keep the pattern close to the one used by Kemory's other agent hooks. This
 # version also accepts a quoted, optionally backslash-escaped key word ("api_key": "...",
 # {\"api_key\": \"...\"}); the other Kemory agent hooks should take the same change.
+# The assignment is ':', '=' or '=>' (PHP arrays, Ruby hashes, Perl's fat comma). A JavaScript
+# arrow function whose parameter is a key word (`token => token.trim()`) is redacted too: a missed
+# password is worse.
 _CREDENTIAL = re.compile(
     r"(bearer\s+[\w\-\.]{8,}"
     r"|(?:api[_-]?key|api[_-]?token|access[_-]?token|auth[_-]?token|token|secret|password|passwd|pwd)"
-    r"(?:\\*[\"'])?\s*[:=]\s*(?:\\*[\"'])?(?:bearer\s+)?[^\s\"',;}]{6,}"
+    r"(?:\\*[\"'])?\s*[:=]>?\s*(?:\\*[\"'])?(?:bearer\s+)?[^\s\"',;}]{6,}"
     r"|sk-[A-Za-z0-9]{16,}"
     r"|gh[pousr]_[A-Za-z0-9]{20,}"
     r"|AKIA[0-9A-Z]{16}"

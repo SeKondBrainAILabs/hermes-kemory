@@ -105,3 +105,21 @@ def test_quoted_key_with_bearer_value_redacts_the_token(text: str) -> None:
 def test_quoted_key_with_bearer_value_exact_output() -> None:
     out = redact('{"access_token": "Bearer 8f2c1a9b7d6e5f4a3b2c1d0e"}')
     assert out == '{"[REDACTED]"}'
+
+
+# '=>' assigns in PHP arrays, Ruby hashes (symbol and string keys, and Hash#inspect output with
+# no spaces) and Perl's fat comma. The last line is JSON-escaped text.
+FAT_ARROW_SECRETS = [
+    ("$db = ['password' => 'Tr0ub4dor-and-3'];", "Tr0ub4dor-and-3"),
+    ('{ :api_key => "kmy_live_9f8e7d6c5b4a3210" }', "kmy_live_9f8e7d6c5b4a3210"),
+    ('{"access_token"=>"q8Zr2LmN0pX4vB7cW1"}', "q8Zr2LmN0pX4vB7cW1"),
+    ("password => hunter2supersecret", "hunter2supersecret"),
+    (r"{\"secret\" => \"q8Zr2LmN0pX4vB7cW1\"}", "q8Zr2LmN0pX4vB7cW1"),
+]
+
+
+@pytest.mark.parametrize(("text", "value"), FAT_ARROW_SECRETS)
+def test_values_after_fat_arrow_keys_are_redacted(text: str, value: str) -> None:
+    out = redact(text)
+    assert value not in out
+    assert "[REDACTED]" in out
