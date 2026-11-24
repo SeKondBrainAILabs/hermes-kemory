@@ -1,0 +1,14 @@
+# Dependabot policy:
+# - Package deps (npm, pip, uv): open-pull-requests-limit 0. Dependabot alerts and
+#   security-fix PRs stay on; routine version-update PRs stay off.
+# - GitHub Actions, Docker, Helm, Terraform: one grouped PR per ecosystem per week,
+#   so pinned SHAs, base images and providers keep moving.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "chore(deps)"
